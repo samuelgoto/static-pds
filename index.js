@@ -2,12 +2,14 @@ import { TestPds } from "@atproto/dev-env";
 
 //console.log(TestPds);
 
+const port = process.env.PORT || 8080;
+
 const pds = await TestPds.create({
-   port: 8080,
+   port: port,
    inviteRequired: false,
 });
 
-console.log("Running");
+console.log(`Running on ${port}`);
 // console.log(pds);
 
 const client = pds.getClient();
