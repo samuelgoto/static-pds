@@ -1,12 +1,12 @@
 {
   "name": "static-pds",
   "version": "1.0.0",
-  "type": "module",
+  "type": "commonjs",
   "description": "a statis pds server",
-  "main": "index.js",
+  "main": "index.mjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js"
+    "test": "mocha -w tests",
+    "start": "node index.mjs"
   },
   "author": "",
   "license": "ISC",
@@ -17,6 +17,7 @@
     "@atproto/dev-env": "^0.3.75",
     "@atproto/pds": "^0.4.83",
     "get-port": "^7.1.0",
+    "mocha": "^11.0.1",
     "uint8arrays": "^5.1.0"
   }
 }
