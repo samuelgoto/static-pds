@@ -1,7 +1,6 @@
 {
   "name": "static-pds",
   "version": "1.0.0",
-  "type": "commonjs",
   "description": "a statis pds server",
   "main": "index.mjs",
   "scripts": {
