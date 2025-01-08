@@ -5,7 +5,7 @@
   "main": "index.mjs",
   "scripts": {
     "test": "mocha -w tests",
-    "start": "node index.mjs"
+    "start": "node index.js"
   },
   "author": "",
   "license": "ISC",
