@@ -5,6 +5,7 @@ const hostname = process.env.HOSTNAME || `localhost`;
 const domains = process.env.DOMAINS || ".test";
 
 const pds = await TestPds.create({
+  devMode: false,
   port: port,
   hostname: hostname,
   serviceHandleDomains: [domains],
