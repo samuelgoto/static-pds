@@ -6,6 +6,9 @@ const port = process.env.PORT || 8080;
 const hostname = process.env.HOSTNAME || `localhost`;
 const domains = process.env.DOMAINS || ".test";
 
+console.log(`$HOSTNAME=${process.env.HOSTNAME}`);
+console.log(`$DOMAINS=${process.env.DOMAINS}`);
+
 async function main() {
 
   const pds = await TestPds.create({
