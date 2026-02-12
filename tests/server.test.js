@@ -1,10 +1,11 @@
 const { AtpAgent } = require("@atproto/api");
 const { assert } = require("chai");
-const { PDS, envToCfg, envToSecrets } = require("@atproto/pds");
+const { envToCfg, envToSecrets } = require("@atproto/pds");
 const { Secp256k1Keypair, randomStr } = require("@atproto/crypto");
+const PDSServer = require("../server");
 
 describe("PDS Server", () => {
-  let pds;
+  let server;
   let agent;
   let port;
 
@@ -29,17 +30,17 @@ describe("PDS Server", () => {
 
     const cfg = envToCfg(env);
     const secrets = envToSecrets(env);
-    pds = await PDS.create(cfg, secrets);
-    await pds.start();
+    server = new PDSServer(cfg, secrets);
+    await server.start();
     agent = new AtpAgent({ service: `http://localhost:${port}` });
   });
 
   after(async () => {
-    if (pds) {
-      await pds.destroy();
+    if (server) {
+      await server.destroy();
     }
   });
-
+  
   it("should respond to describeServer", async () => {
     const response = await agent.api.com.atproto.server.describeServer();
     assert.isTrue(response.success);
