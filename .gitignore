@@ -3,4 +3,14 @@ package-lock.json
 pnpm-lock.yaml
 
 .vercel
+.env
 .env*.local
+
+# Local Data and State
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.pem
+data/
+data.sqld/
+actors/

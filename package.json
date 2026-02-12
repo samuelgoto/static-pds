@@ -2,9 +2,9 @@
   "name": "static-pds",
   "version": "1.0.0",
   "description": "a static pds server",
-  "main": "index.mjs",
+  "main": "index.js",
   "scripts": {
-    "test": "mocha -w tests",
+    "test": "mocha tests/server.test.js",
     "start": "node index.js"
   },
   "author": "",
@@ -24,6 +24,6 @@
     "uint8arrays": "^5.1.0"
   },
   "devDependencies": {
-    "chai": "^6.2.2"
+    "chai": "^5.1.1"
   }
 }

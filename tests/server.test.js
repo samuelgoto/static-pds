@@ -72,7 +72,6 @@ describe("PDS Server", () => {
     };
     let userAgent;
     let postUri;
-    let postCid;
 
     before(async () => {
       await agent.createAccount(user);
@@ -96,9 +95,7 @@ describe("PDS Server", () => {
       });
       assert.isObject(response.data);
       assert.isString(response.data.uri);
-      assert.isString(response.data.cid);
       postUri = response.data.uri;
-      postCid = response.data.cid;
     });
 
     it("should get the created post", async () => {
