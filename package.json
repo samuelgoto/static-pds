@@ -15,11 +15,15 @@
     "@atproto/crypto": "^0.4.3",
     "@atproto/dev-env": "^0.3.75",
     "@atproto/pds": "^0.4.209",
+    "@libsql/client": "^0.17.0",
     "@vercel/blob": "^2.2.0",
     "dotenv": "^17.2.4",
     "express": "^4.22.1",
     "get-port": "^7.1.0",
     "mocha": "^11.0.1",
     "uint8arrays": "^5.1.0"
+  },
+  "devDependencies": {
+    "chai": "^6.2.2"
   }
 }
