@@ -217,4 +217,75 @@ describe("PDS End-to-End User Flows (Turso Blobstore)", () => {
     }
     assert.equal(after.rows.length, 0, "Blob should have been deleted from Turso after dereferencing");
   });
+
+  it("Takedown Flow: Blobs should be quarantined and unavailable", async () => {
+    const handle = `${randomStr(8, "base32")}.test`;
+    const userAgent = await createAndLoginUser(handle);
+
+    // 1. Upload a blob
+    const data = Buffer.from("problematic-content");
+    const upload = await userAgent.uploadBlob(data, { encoding: 'image/png' });
+    const cid = upload.data.blob.ref.toString();
+
+    // 2. Takedown the blob (via admin API)
+    const adminAgent = new AtpAgent({ service: `http://localhost:${port}` });
+    await adminAgent.api.com.atproto.admin.updateSubjectStatus({
+        subject: {
+            $type: 'com.atproto.admin.defs#repoBlobRef',
+            did: userAgent.session.did,
+            cid: cid
+        },
+        takedown: {
+            applied: true,
+            ref: 'test-takedown'
+        }
+    }, {
+        headers: { authorization: `Basic ${Buffer.from("admin:admin").toString('base64')}` },
+        encoding: 'application/json'
+    });
+
+    // 3. Verify it is quarantined in Turso
+    const client = createClient({ url: `file:${dbPath}` });
+    const result = await client.execute({ 
+        sql: "SELECT is_quarantined FROM blobs WHERE cid = ?", 
+        args: [cid] 
+    });
+    assert.equal(result.rows[0].is_quarantined, 1, "Blob should be marked as quarantined in Turso");
+
+    // 4. Verify it's unavailable via API
+    try {
+        await userAgent.api.com.atproto.sync.getBlob({
+            did: userAgent.session.did,
+            cid: cid
+        });
+        assert.fail("Should have thrown 400/BlobNotFound");
+    } catch (e) {
+        assert.equal(e.status, 400);
+    }
+
+    // 5. Unquarantine
+    await adminAgent.api.com.atproto.admin.updateSubjectStatus({
+        subject: {
+            $type: 'com.atproto.admin.defs#repoBlobRef',
+            did: userAgent.session.did,
+            cid: cid
+        },
+        takedown: {
+            applied: false
+        }
+    }, {
+        headers: { authorization: `Basic ${Buffer.from("admin:admin").toString('base64')}` },
+        encoding: 'application/json'
+    });
+
+    // 6. Verify it's available again
+    const back = await client.execute({ sql: "SELECT is_quarantined FROM blobs WHERE cid = ?", args: [cid] });
+    assert.equal(back.rows[0].is_quarantined, 0);
+    
+    const getRes = await userAgent.api.com.atproto.sync.getBlob({
+        did: userAgent.session.did,
+        cid: cid
+    });
+    assert.isTrue(getRes.success);
+  });
 });
