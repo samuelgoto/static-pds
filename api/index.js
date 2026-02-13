@@ -18,6 +18,7 @@ const main = async () => {
   env.databaseAuthToken = process.env.PDS_DATABASE_AUTH_TOKEN;
 
   env.version ||= pkg.version;
+  env.blobstoreDiskLocation ||= "/tmp/blobs"; // Dummy to satisfy config check
   const cfg = envToCfg(env);
   const secrets = envToSecrets(env);
 
@@ -39,7 +40,7 @@ const main = async () => {
   }
 
   const server = new PDSServer(cfg, secrets);
-  await server.start(overrides);
+  await server.start(overrides, { skipListen: !!process.env.VERCEL });
   return server.pds.app;
 };
 

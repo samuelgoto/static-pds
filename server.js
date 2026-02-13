@@ -9,13 +9,19 @@ class PDSServer {
     this.secrets = secrets;
   }
 
-  async start(overrides = {}) {
+  async start(overrides = {}, opts = {}) {
     this.pds = await PDS.create(this.cfg, this.secrets, overrides);
     if (overrides.blobstore) {
       this.pds.ctx.blobstore = overrides.blobstore;
       this.pds.ctx.actorStore.resources.blobstore = overrides.blobstore;
     }
-    await this.pds.start();
+    
+    if (opts.skipListen) {
+      await this.pds.ctx.sequencer.start();
+    } else {
+      await this.pds.start();
+    }
+    
     httpLogger.info("pds has started");
 
     this.pds.app.get("/tls-check", (req, res) => {
