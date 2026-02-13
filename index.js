@@ -40,6 +40,17 @@ const main = async () => {
 
   const server = new PDSServer(cfg, secrets);
   await server.start(overrides);
+  return server.pds.app;
 };
 
-main();
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Failed to start PDS:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = async (req, res) => {
+  const app = await main();
+  return app(req, res);
+};
