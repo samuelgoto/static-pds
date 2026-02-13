@@ -5,12 +5,14 @@ pnpm-lock.yaml
 .vercel
 .env
 .env*.local
+.env*
 
 # Local Data and State
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
 *.pem
+*.db
 data/
 data.sqld/
 actors/
