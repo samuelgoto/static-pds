@@ -16,6 +16,11 @@ class PDSServer {
       this.pds.ctx.actorStore.resources.blobstore = overrides.blobstore;
     }
     
+    // If we overrode the DB, we must also ensure the sequencer uses it
+    if (overrides.db) {
+        this.pds.ctx.sequencer.db = overrides.db;
+    }
+    
     if (opts.skipListen) {
       await this.pds.ctx.sequencer.start();
     } else {
