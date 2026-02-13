@@ -4,7 +4,7 @@
   "description": "a static pds server",
   "main": "index.js",
   "scripts": {
-    "test": "mocha tests/server.test.js",
+    "test": "mocha 'tests/**/*.test.js'",
     "start": "node index.js"
   },
   "author": "",
