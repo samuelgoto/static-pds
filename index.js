@@ -7,6 +7,8 @@ const {
 } = require("@atproto/pds");
 const pkg = require("@atproto/pds/package.json");
 const PDSServer = require("./server");
+const { TursoBlobStore, setupTursoBlobStoreSchema } = require("./turso-blobstore");
+const { createClient } = require("@libsql/client");
 
 const main = async () => {
   const env = readEnv();
@@ -18,8 +20,26 @@ const main = async () => {
   env.version ||= pkg.version;
   const cfg = envToCfg(env);
   const secrets = envToSecrets(env);
+
+  const overrides = {};
+  const tursoUrl = process.env.TURSO_BLOBSTORE_URL || process.env.PDS_DATABASE_URL;
+  const tursoAuthToken = process.env.TURSO_BLOBSTORE_AUTH_TOKEN || process.env.PDS_DATABASE_AUTH_TOKEN;
+
+  if (tursoUrl) {
+    const dbConfig = {
+      url: tursoUrl,
+      authToken: tursoAuthToken,
+    };
+    
+    // Initialize schema
+    const client = createClient(dbConfig);
+    await setupTursoBlobStoreSchema(client);
+    
+    overrides.blobstore = TursoBlobStore.creator(dbConfig);
+  }
+
   const server = new PDSServer(cfg, secrets);
-  await server.start();
+  await server.start(overrides);
 };
 
 main();

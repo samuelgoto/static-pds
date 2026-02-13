@@ -1,5 +1,4 @@
 const { AtpAgent } = require("@atproto/api");
-const { assert } = require("chai");
 const { envToCfg, envToSecrets } = require("@atproto/pds");
 const { Secp256k1Keypair, randomStr } = require("@atproto/crypto");
 const PDSServer = require("../server");
@@ -8,8 +7,11 @@ describe("PDS Server", () => {
   let server;
   let agent;
   let port;
+  let assert;
 
   before(async () => {
+    const chai = await import("chai");
+    assert = chai.assert;
     const { default: getPort } = await import("get-port");
     port = await getPort();
     const plcRotationKey = await Secp256k1Keypair.create({ exportable: true });

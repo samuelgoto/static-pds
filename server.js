@@ -9,8 +9,12 @@ class PDSServer {
     this.secrets = secrets;
   }
 
-  async start() {
-    this.pds = await PDS.create(this.cfg, this.secrets);
+  async start(overrides = {}) {
+    this.pds = await PDS.create(this.cfg, this.secrets, overrides);
+    if (overrides.blobstore) {
+      this.pds.ctx.blobstore = overrides.blobstore;
+      this.pds.ctx.actorStore.resources.blobstore = overrides.blobstore;
+    }
     await this.pds.start();
     httpLogger.info("pds has started");
 
