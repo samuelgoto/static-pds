@@ -1,4 +1,4 @@
-const { AtpAgent } = require("@atproto/api");
+const { AtpAgent, BlobRef } = require("@atproto/api");
 const { envToCfg, envToSecrets } = require("@atproto/pds");
 const { Secp256k1Keypair, randomStr } = require("@atproto/crypto");
 const PDSServer = require("../server");
@@ -7,12 +7,12 @@ const { createClient } = require("@libsql/client");
 const fs = require("fs");
 const path = require("path");
 
-describe("PDS Server with Turso (LibSQL) Blobstore", () => {
+describe("PDS End-to-End User Flows (Turso Blobstore)", () => {
   let server;
   let agent;
   let port;
   let assert;
-  const dbPath = path.join(__dirname, "test-turso.db");
+  const dbPath = path.join(__dirname, "test-e2e-turso.db");
 
   before(async () => {
     if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
@@ -27,8 +27,8 @@ describe("PDS Server with Turso (LibSQL) Blobstore", () => {
     const env = {
       devMode: true,
       port,
-      databaseLocation: ":memory:", // PDS uses in-memory SQLite for main DBs
-      blobstoreDiskLocation: "/tmp/atproto-test-blobstore", // Placeholder
+      databaseLocation: ":memory:",
+      blobstoreDiskLocation: "/tmp/atproto-test-blobstore", 
       recoveryDidKey: recoveryKey,
       adminPassword: "admin",
       jwtSecret: "secret",
@@ -40,7 +40,6 @@ describe("PDS Server with Turso (LibSQL) Blobstore", () => {
     const cfg = envToCfg(env);
     const secrets = envToSecrets(env);
     
-    // Set up Turso Blobstore
     const dbConfig = { url: `file:${dbPath}` };
     const client = createClient(dbConfig);
     await setupTursoBlobStoreSchema(client);
@@ -65,43 +64,157 @@ describe("PDS Server with Turso (LibSQL) Blobstore", () => {
         } catch (e) {}
     }
   });
-  
-  it("should allow uploading and retrieving a blob from Turso DB", async () => {
-    const user = {
-      handle: `${randomStr(8, "base32")}.test`,
-      password: "password123",
-      email: `testuser${Date.now()}@example.com`,
-    };
-    await agent.createAccount(user);
+
+  async function createAndLoginUser(handle) {
+    const password = "password123";
+    await agent.createAccount({
+      handle,
+      email: `${handle}@example.com`,
+      password,
+    });
     const userAgent = new AtpAgent({ service: `http://localhost:${port}` });
     await userAgent.login({
-      identifier: user.handle,
-      password: user.password,
+      identifier: handle,
+      password,
     });
+    return userAgent;
+  }
 
-    const blobData = Buffer.from("Hello Turso DB Blob!");
-    const uploadRes = await userAgent.api.com.atproto.repo.uploadBlob(blobData, {
-        encoding: 'text/plain'
+  it("Profile Flow: Create account, upload avatar, and set profile", async () => {
+    const handle = `${randomStr(8, "base32")}.test`;
+    const userAgent = await createAndLoginUser(handle);
+
+    // 1. Upload Avatar
+    const avatarData = Buffer.from("fake-image-binary-data");
+    const uploadRes = await userAgent.api.com.atproto.repo.uploadBlob(avatarData, {
+      encoding: 'image/png'
     });
-    
     assert.isTrue(uploadRes.success);
-    const blobRef = uploadRes.data.blob;
+    const avatarRef = uploadRes.data.blob;
 
-    // Verify it's in the Turso database
+    // 2. Set Profile
+    await userAgent.api.com.atproto.repo.putRecord({
+      repo: userAgent.session.did,
+      collection: 'app.bsky.actor.profile',
+      rkey: 'self',
+      record: {
+        displayName: 'Test User',
+        description: 'Testing Turso Blobstore',
+        avatar: avatarRef,
+      }
+    });
+
+    // 3. Verify Record exists in PDS
+    const record = await userAgent.api.com.atproto.repo.getRecord({
+        repo: userAgent.session.did,
+        collection: 'app.bsky.actor.profile',
+        rkey: 'self'
+    });
+    assert.equal(record.data.value.displayName, 'Test User');
+    assert.deepEqual(record.data.value.avatar, avatarRef);
+
+    // 4. Verify Blob is in Turso and permanent
     const client = createClient({ url: `file:${dbPath}` });
     const result = await client.execute({
-        sql: "SELECT * FROM blobs WHERE cid = ?",
-        args: [blobRef.ref.toString()]
+        sql: "SELECT is_permanent FROM blobs WHERE cid = ?",
+        args: [avatarRef.ref.toString()]
     });
     assert.equal(result.rows.length, 1);
-    assert.deepEqual(Buffer.from(new Uint8Array(result.rows[0].data)), blobData);
+    assert.equal(result.rows[0].is_permanent, 1, "Blob should be permanent");
+  });
 
-    // Retrieve via API
-    const getRes = await userAgent.api.com.atproto.sync.getBlob({
-        did: userAgent.session.did,
-        cid: blobRef.ref.toString()
+  it("Post with Images Flow: Create post with multiple images", async () => {
+    const handle = `${randomStr(8, "base32")}.test`;
+    const userAgent = await createAndLoginUser(handle);
+
+    // 1. Upload multiple images
+    const img1 = Buffer.from("image-1-data");
+    const img2 = Buffer.from("image-2-data");
+
+    const [res1, res2] = await Promise.all([
+      userAgent.uploadBlob(img1, { encoding: 'image/jpeg' }),
+      userAgent.uploadBlob(img2, { encoding: 'image/jpeg' })
+    ]);
+
+    // 2. Create post referencing images
+    const record = {
+        text: "Check out these two images!",
+        createdAt: new Date().toISOString(),
+        embed: {
+          $type: 'app.bsky.embed.images',
+          images: [
+            { image: res1.data.blob, alt: 'First image' },
+            { image: res2.data.blob, alt: 'Second image' }
+          ]
+        }
+    };
+    const postRes = await userAgent.api.com.atproto.repo.createRecord({
+        repo: userAgent.session.did,
+        collection: 'app.bsky.feed.post',
+        record
     });
-    assert.isTrue(getRes.success);
-    assert.deepEqual(Buffer.from(getRes.data), blobData);
+
+    // 3. Retrieve post record directly from PDS
+    const rkey = postRes.data.uri.split('/').pop();
+    const fetchedRecord = await userAgent.api.com.atproto.repo.getRecord({
+        repo: userAgent.session.did,
+        collection: 'app.bsky.feed.post',
+        rkey
+    });
+    
+    assert.equal(fetchedRecord.data.value.embed.images.length, 2);
+    
+    // 4. Fetch actual blob data from sync endpoint
+    const fetchedImg1 = await userAgent.api.com.atproto.sync.getBlob({
+      did: userAgent.session.did,
+      cid: res1.data.blob.ref.toString()
+    });
+    assert.deepEqual(Buffer.from(fetchedImg1.data), img1);
+  });
+
+  it("Deletion Flow: Blobs should be removed from Turso when record is deleted", async () => {
+    const handle = `${randomStr(8, "base32")}.test`;
+    const userAgent = await createAndLoginUser(handle);
+
+    // 1. Upload and post (must use image MIME because bsky post embed expects images)
+    const data = Buffer.from("fake-image-binary");
+    const upload = await userAgent.uploadBlob(data, { encoding: 'image/png' });
+    const cid = upload.data.blob.ref.toString();
+
+    const record = {
+        text: "Temporary post",
+        createdAt: new Date().toISOString(),
+        embed: {
+          $type: 'app.bsky.embed.images',
+          images: [{ image: upload.data.blob, alt: 'temp' }]
+        }
+    };
+    const post = await userAgent.api.com.atproto.repo.createRecord({
+        repo: userAgent.session.did,
+        collection: 'app.bsky.feed.post',
+        record
+    });
+
+    // Verify it exists in Turso
+    const client = createClient({ url: `file:${dbPath}` });
+    const before = await client.execute({ sql: "SELECT 1 FROM blobs WHERE cid = ?", args: [cid] });
+    assert.equal(before.rows.length, 1);
+
+    // 2. Delete the record
+    const rkey = post.data.uri.split('/').pop();
+    await userAgent.api.com.atproto.repo.deleteRecord({
+      repo: userAgent.session.did,
+      collection: 'app.bsky.feed.post',
+      rkey
+    });
+
+    // 3. Verify blob is gone from Turso (PDS background worker deletes dereferenced blobs)
+    let after;
+    for (let i = 0; i < 10; i++) {
+        after = await client.execute({ sql: "SELECT 1 FROM blobs WHERE cid = ?", args: [cid] });
+        if (after.rows.length === 0) break;
+        await new Promise(r => setTimeout(r, 200));
+    }
+    assert.equal(after.rows.length, 0, "Blob should have been deleted from Turso after dereferencing");
   });
 });
